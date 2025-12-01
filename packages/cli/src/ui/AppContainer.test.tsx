@@ -13,7 +13,6 @@ import {
   afterEach,
   type Mock,
   type MockedObject,
-  type MockInstance,
 } from 'vitest';
 import { render } from '../test-utils/render.js';
 import { waitFor } from '../test-utils/async.js';
@@ -1657,7 +1656,6 @@ describe('AppContainer State Management', () => {
   });
 
   describe('Terminal Bell', () => {
-    let stdoutSpy: MockInstance;
     let rerender: (tree: React.ReactElement) => void = (tree) => {
       rerender = render(tree).rerender;
     };
@@ -1679,9 +1677,7 @@ describe('AppContainer State Management', () => {
 
     beforeEach(() => {
       vi.useFakeTimers();
-      stdoutSpy = vi
-        .spyOn(process.stdout, 'write')
-        .mockImplementation(() => true);
+      resetBell();
     });
 
     afterEach(() => {
@@ -1702,67 +1698,77 @@ describe('AppContainer State Management', () => {
       });
 
       rerender(
-        <AppContainer
-          config={mockConfig}
-          settings={settings}
-          version="1.0.0"
-          initializationResult={mockInitResult}
-        />,
+        <SettingsContext.Provider value={settings}>
+          <AppContainer
+            config={mockConfig}
+            version="1.0.0"
+            initializationResult={mockInitResult}
+          />
+        </SettingsContext.Provider>,
       );
+    };
+
+    const bellWritten = () =>
+      mocks.mockStdout.write.mock.calls.filter((call) =>
+        call[0].includes('\u0007'),
+      ).length > 0;
+
+    const resetBell = () => {
+      mocks.mockStdout.write.mockClear();
     };
 
     it('should not ring bell on initial render', () => {
       streamState('idle');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
     });
 
     it('should ring bell when streaming state becomes idle', () => {
       streamState('responding');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
       streamState('idle');
-      expect(stdoutSpy).toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(true);
     });
 
     it('should ring bell when streaming state is waiting for confirmation', () => {
       streamState('responding');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
       streamState('waiting_for_confirmation');
-      expect(stdoutSpy).toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(true);
     });
 
     it('should not ring bell if model has not been responding', () => {
       streamState('idle');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
       streamState('waiting_for_confirmation');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
     });
 
     it('should not ring bell if not enough time has passed', () => {
       // First round, should ring the bell.
       streamState('responding');
       streamState('idle');
-      expect(stdoutSpy).toHaveBeenCalledWith('\u0007');
-      stdoutSpy.mockReset();
+      expect(bellWritten()).toBe(true);
+      resetBell();
 
       // Not enough time to allow another ring of the bell.
       streamState('responding');
       vi.advanceTimersByTime(200);
       streamState('idle');
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
     });
 
     it('should ring bell if enough time has passed', () => {
       // First round, should ring the bell.
       streamState('responding');
       streamState('idle');
-      expect(stdoutSpy).toHaveBeenCalledWith('\u0007');
-      stdoutSpy.mockReset();
+      expect(bellWritten()).toBe(true);
+      resetBell();
 
       // Enough time to allow another ring of the bell.
       streamState('responding');
       vi.advanceTimersByTime(1001);
       streamState('idle');
-      expect(stdoutSpy).toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(true);
     });
 
     it('should not ring bell if setting is disabled', () => {
@@ -1784,7 +1790,7 @@ describe('AppContainer State Management', () => {
       streamState('responding', settingsWithoutTerminalBell);
       streamState('idle', settingsWithoutTerminalBell);
 
-      expect(stdoutSpy).not.toHaveBeenCalledWith('\u0007');
+      expect(bellWritten()).toBe(false);
     });
   });
 
