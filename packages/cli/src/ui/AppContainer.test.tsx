@@ -1656,8 +1656,11 @@ describe('AppContainer State Management', () => {
   });
 
   describe('Terminal Bell', () => {
-    let rerender: (tree: React.ReactElement) => void = (tree) => {
-      rerender = render(tree).rerender;
+    let rerender: (settings: LoadedSettings) => void = (settings) => {
+      const { rerender: r } = renderAppContainer({ settings });
+      rerender = (s) => {
+        r(getAppContainer({ settings: s }));
+      };
     };
 
     const settingsWithTerminalBell = {
@@ -1697,15 +1700,7 @@ describe('AppContainer State Management', () => {
         cancelOngoingRequest: vi.fn(),
       });
 
-      rerender(
-        <SettingsContext.Provider value={settings}>
-          <AppContainer
-            config={mockConfig}
-            version="1.0.0"
-            initializationResult={mockInitResult}
-          />
-        </SettingsContext.Provider>,
-      );
+      rerender(settings);
     };
 
     const bellWritten = () =>
@@ -1752,7 +1747,9 @@ describe('AppContainer State Management', () => {
 
       // Not enough time to allow another ring of the bell.
       streamState('responding');
-      vi.advanceTimersByTime(200);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
       streamState('idle');
       expect(bellWritten()).toBe(false);
     });
@@ -1766,7 +1763,9 @@ describe('AppContainer State Management', () => {
 
       // Enough time to allow another ring of the bell.
       streamState('responding');
-      vi.advanceTimersByTime(1001);
+      act(() => {
+        vi.advanceTimersByTime(1001);
+      });
       streamState('idle');
       expect(bellWritten()).toBe(true);
     });
